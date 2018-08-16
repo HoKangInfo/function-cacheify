@@ -13,8 +13,8 @@ const LRU = require('lru-cache')
 const KeyStore = LRU(1000)
 
 const CacheOpts = {
-  'max': 1000,
-  'maxAge': 1000 * 60 * 60 * 4 // cache 4hr
+  max: 1000,
+  maxAge: 1000 * 60 * 60 * 4 // cache 4hr
 }
 
 const AsyncCache = require('async-cache')
@@ -34,14 +34,28 @@ class AsyncCachePromise extends AsyncCache {
 }
 
 const proxy = (fn, opts) => {
-  const StoreCache = new AsyncCachePromise(_.defaults({
-    'load': (key) => fn.apply(fn, KeyStore.get(key))
-  }, _.defaults(opts || {}, CacheOpts)))
+  const _opts = _.defaults({
+    stale: true,
+    load: (key) => fn.apply(fn, KeyStore.get(key))
+  }, (opts || {}), CacheOpts)
+  const StoreCache = new AsyncCachePromise(_opts)
+  const isEmpty = (_opts.isEmpty === 'function') ? _opts.isEmpty : _.isEmpty
 
   return (...args) => {
     const key = hash(args)
     if (!KeyStore.has(key)) KeyStore.set(key, args)
-    return StoreCache.get(key)
+
+    if (!StoreCache.has(key)) {
+      let data = StoreCache.peek(key)
+      if (data !== undefined) return Promise.resolve(data)
+      // perpare
+      StoreCache.get(key)
+    }
+
+    return StoreCache.get(key).then(data => {
+      if (isEmpty(data)) StoreCache.del(key)
+      return data
+    })
   }
 }
 
