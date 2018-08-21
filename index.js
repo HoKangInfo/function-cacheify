@@ -49,7 +49,7 @@ const proxy = (fn, opts) => {
       let data = StoreCache.peek(key)
       if (data !== undefined) return Promise.resolve(data)
       // perpare
-      StoreCache.get(key)
+      StoreCache.get(key).catch(e=> e)
     }
 
     return StoreCache.get(key).then(data => {
